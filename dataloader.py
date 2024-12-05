@@ -418,8 +418,7 @@ def get_dataset(
     elif dataset_name == 'squad':
       question = example['question']
       context = example['context']
-      truncated_context = context[: 1024 - len(question) - 50]
-      text = f"Question: {question} Context: {truncated_context}"
+      text = f"Question: {question} Context: {context}"
     else:
       text = example['text']
     
@@ -434,10 +433,8 @@ def get_dataset(
                          add_special_tokens=False,
                          return_attention_mask=False,
                          return_token_type_ids=False)
-      tokens = {"input_ids": [t + [EOS] for t in tokens["input_ids"]] if isinstance(tokens["input_ids"][0], list) else [tokens["input_ids"] + [EOS]]}
-      # tokens = {'input_ids':
-      #           [t + [EOS] for t in tokens['input_ids']]}
-
+      tokens = {'input_ids':
+                [t + [EOS] for t in tokens['input_ids']]}
       # Still missing BOS, but will be added in group_texts
     else:
       tokens = tokenizer(text,
