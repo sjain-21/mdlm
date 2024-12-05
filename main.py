@@ -116,6 +116,54 @@ def generate_samples(config, logger, tokenizer):
           model.gen_ppl_metric.compute())
   return text_samples
 
+def generate_squad_samples(config, logger, tokenizer):
+    """
+    Generates answers for SQuAD dataset using the pretrained model.
+
+    Args:
+        config: The Hydra configuration object.
+        logger: Logger instance for structured logging.
+        tokenizer: Tokenizer instance for the model.
+    """
+    logger.info("Generating answers for the SQuAD dataset.")
+
+    # Load the model
+    model = _load_from_checkpoint(config=config, tokenizer=tokenizer)
+    if config.eval.disable_ema:
+        logger.info("Disabling EMA.")
+        model.ema = None
+
+    # Load the dataset using dataloader
+    _, valid_loader = dataloader.get_dataloaders(
+        config=config, tokenizer=tokenizer, skip_train=True
+    )
+
+    # Process each batch in the validation loader
+    for batch_idx, batch in enumerate(valid_loader):
+        # Decode question-context pairs from the batch
+        input_ids = batch["input_ids"]
+        attention_mask = batch["attention_mask"]
+
+        # Generate samples
+        samples = model.restore_model_and_sample(
+            num_steps=config.sampling.steps, input_ids=input_ids, attention_mask=attention_mask
+        )
+        generated_text = tokenizer.batch_decode(samples, skip_special_tokens=True)
+
+        # Print results for each sample
+        for i, (input_text, generated_answer) in enumerate(zip(input_ids, generated_text)):
+            question_context = tokenizer.decode(input_text, skip_special_tokens=True)
+            question, context = question_context.split(" Context: ")
+            print(f"\nSample {batch_idx * len(generated_text) + i + 1}:")
+            print(f"Question: {question}")
+            print(f"Context: {context[:200]}{'...' if len(context) > 200 else ''}")
+            print(f"Generated Answer: {generated_answer}")
+
+        # Break after processing a few batches for demonstration
+        if batch_idx >= 2:  # Adjust this limit based on your needs
+            logger.info("Processed 3 batches for demonstration.")
+            break
+
 def _ppl_eval(config, logger, tokenizer):
   logger.info('Starting Zero Shot Eval.')
 
@@ -193,7 +241,9 @@ def main(config):
   logger = utils.get_logger(__name__)
   tokenizer = dataloader.get_tokenizer(config)
 
-  if config.mode == 'sample_eval':
+  if config.mode == 'sample_eval' and config.data == 'squad':
+    generate_squad_samples(config, logger, tokenizer)
+  elif config.mode == 'sample_eval':
     generate_samples(config, logger, tokenizer)
   elif config.mode == 'ppl_eval':
     _ppl_eval(config, logger, tokenizer)
